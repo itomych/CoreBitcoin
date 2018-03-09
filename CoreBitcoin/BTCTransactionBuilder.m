@@ -17,6 +17,19 @@ NSString* const BTCTransactionBuilderErrorDomain = @"com.oleganza.CoreBitcoin.Tr
 @property(nonatomic, readwrite) BTCAmount outputsAmount;
 @end
 
+//        // inputs - sender ; outputs - receiver
+//        // sender
+//        BTCAmount change = result.inputsAmount - result.outputsAmount - fee;
+//
+//        // 50/50
+//        BTCAmount change = result.inputsAmount - fee / 2;
+//        result.outputsAmount -= fee / 2;
+//
+//        // receiver
+//        BTCAmount change = result.inputsAmount - result.outputsAmount;
+//        result.outputsAmount -= fee;
+
+
 @implementation BTCTransactionBuilder
 
 - (id) init {
@@ -30,109 +43,128 @@ NSString* const BTCTransactionBuilderErrorDomain = @"com.oleganza.CoreBitcoin.Tr
     return self;
 }
 
-- (BTCTransactionBuilderResult*) buildTransaction:(NSError**)errorOut {
+- (BTCTransactionBuilderResult*) buildTransaction:(NSError**)errorOut feeType:(BTCTransactionBuilderFeeType)feeType {
     if (!self.changeScript) {
         if (errorOut) *errorOut = [NSError errorWithDomain:BTCTransactionBuilderErrorDomain code:BTCTransactionBuilderInsufficientFunds userInfo:nil];
         return nil;
     }
-
+    
     NSEnumerator* unspentsEnumerator = self.unspentOutputsEnumerator;
-
+    
     if (!unspentsEnumerator) {
         if (errorOut) *errorOut = [NSError errorWithDomain:BTCTransactionBuilderErrorDomain code:BTCTransactionBuilderUnspentOutputsMissing userInfo:nil];
         return nil;
     }
-
+    
     BTCTransactionBuilderResult* result = [[BTCTransactionBuilderResult alloc] init];
     result.transaction = [[BTCTransaction alloc] init];
-
+    
     // If no outputs given, try to spend all available unspents.
     if (self.outputs.count == 0) {
         result.inputsAmount = 0;
-
+        
         for (BTCTransactionOutput* utxo in unspentsEnumerator) {
             result.inputsAmount += utxo.value;
-
+            
             BTCTransactionInput* txin = [self makeTransactionInputWithUnspentOutput:utxo];
             [result.transaction addInput:txin];
         }
-
+        
         if (result.transaction.inputs.count == 0) {
             if (errorOut) *errorOut = [NSError errorWithDomain:BTCTransactionBuilderErrorDomain code:BTCTransactionBuilderUnspentOutputsMissing userInfo:nil];
             return nil;
         }
-
+        
         // Prepare a destination output.
         // Value will be determined after computing the fee.
         BTCTransactionOutput* changeOutput = [[BTCTransactionOutput alloc] initWithValue:BTC_MAX_MONEY script:self.changeScript];
         [result.transaction addOutput:changeOutput];
-
+        
         result.fee = [self computeFeeForTransaction:result.transaction];
         result.outputsAmount = result.inputsAmount - result.fee;
-
+        
         // Check if inputs cover the fees
         if (result.outputsAmount < 0) {
             if (errorOut) *errorOut = [NSError errorWithDomain:BTCTransactionBuilderErrorDomain code:BTCTransactionBuilderInsufficientFunds userInfo:nil];
             return nil;
         }
-
+        
         // Set the output value as needed
         changeOutput.value = result.outputsAmount;
-
+        
         result.unsignedInputsIndexes = [self attemptToSignTransaction:result.transaction error:errorOut];
         if (!result.unsignedInputsIndexes) {
             return nil;
         }
-
+        
         return result;
-
+        
     } // if no outputs
-
+    
     // We are having one or more outputs (e.g. normal payment)
     // Need to find appropriate unspents and compose a transaction.
-
+    
     // Prepare all outputs
-
+    
     result.outputsAmount = 0; // will contain change value after all inputs are finalized
-
+    
     for (BTCTransactionOutput* txout in self.outputs) {
         result.outputsAmount += txout.value;
         [result.transaction addOutput:txout];
     }
-
+    
     // We'll determine final change value depending on inputs.
     // Setting default to MAX_MONEY will protect against a bug when we fail to update the amount and
     // spend unexpected amount on mining fees.
     BTCTransactionOutput* changeOutput = [[BTCTransactionOutput alloc] initWithValue:BTC_MAX_MONEY script:self.changeScript];
     [result.transaction addOutput:changeOutput];
-
+    
     // We have specific outputs with specific amounts, so we need to select the best amount of coins.
-
+    
     result.inputsAmount = 0;
-
+    
     for (BTCTransactionOutput* utxo in unspentsEnumerator) {
         result.inputsAmount += utxo.value;
-
+        
         BTCTransactionInput* txin = [self makeTransactionInputWithUnspentOutput:utxo];
         [result.transaction addInput:txin];
-
+        
         // Before computing the fee, quick check if we have enough inputs to cover the outputs.
         // If not, go and add one more utxo before wasting time computing fees.
         if (result.inputsAmount < result.outputsAmount) {
             // Try adding more unspent outputs on the next cycle.
             continue;
         }
-
+        
         BTCAmount fee = [self computeFeeForTransaction:result.transaction];
-
-        BTCAmount change = result.inputsAmount - result.outputsAmount - fee;
-
+        
+        BTCAmount change = 0;
+        
+        switch (feeType) {
+            case BTCTransactionBuilderFeeTypeSender :
+                change = result.inputsAmount - result.outputsAmount - fee;
+                break;
+                
+            case BTCTransactionBuilderFeeTypeHalf :
+                change = result.inputsAmount - fee / 2;
+                result.outputsAmount -= fee / 2;
+                break;
+                
+            case BTCTransactionBuilderFeeTypeReceiver :
+                change = result.inputsAmount - result.outputsAmount;
+                result.outputsAmount -= fee;
+                break;
+                
+            default:
+                break;
+        }
+        
         if (change >= self.minimumChange) {
             // We have a big enough change, set missing values and return.
             changeOutput.value = change;
             result.outputsAmount += change;
             result.fee = fee;
-
+            
             result.unsignedInputsIndexes = [self attemptToSignTransaction:result.transaction error:errorOut];
             if (!result.unsignedInputsIndexes) {
                 return nil;
@@ -144,7 +176,7 @@ NSString* const BTCTransactionBuilderErrorDomain = @"com.oleganza.CoreBitcoin.Tr
         } else if (change >= 0 && change <= self.dustChange) {
             // This also includes the case when change is exactly zero satoshis.
             // Remove the change output, keep existing outputsAmount, set fee and try to sign.
-
+            
             NSMutableArray* txoutputs = [result.transaction.outputs mutableCopy];
             [txoutputs removeObjectIdenticalTo:changeOutput];
             result.transaction.outputs = txoutputs;
@@ -160,9 +192,9 @@ NSString* const BTCTransactionBuilderErrorDomain = @"com.oleganza.CoreBitcoin.Tr
             // Try adding more utxos on the next cycle.
         }
     }
-
+    
     // If we haven't finished within the loop, then we don't have enough unspent outputs and should fail.
-
+    
     BTCTransactionBuilderError errorCode = BTCTransactionBuilderInsufficientFunds;
     if (result.transaction.inputs.count == 0) {
         errorCode = BTCTransactionBuilderUnspentOutputsMissing;
@@ -171,6 +203,9 @@ NSString* const BTCTransactionBuilderErrorDomain = @"com.oleganza.CoreBitcoin.Tr
     return nil;
 }
 
+- (BTCTransactionBuilderResult*) buildTransaction:(NSError**)errorOut {
+    return [self buildTransaction:errorOut feeType:BTCTransactionBuilderFeeTypeSender];
+}
 
 
 

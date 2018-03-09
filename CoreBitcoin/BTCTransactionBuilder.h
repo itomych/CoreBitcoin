@@ -16,6 +16,18 @@ typedef NS_ENUM(NSUInteger, BTCTransactionBuilderError) {
     BTCTransactionBuilderInsufficientFunds = 3,
 };
 
+typedef NS_ENUM(NSUInteger, BTCTransactionBuilderFeeType) {
+    
+    BTCTransactionBuilderFeeTypeSender = 1,
+    
+    //50/50
+    BTCTransactionBuilderFeeTypeHalf = 2,
+    
+    
+    BTCTransactionBuilderFeeTypeReceiver = 3,
+};
+
+
 @class BTCKey;
 @class BTCScript;
 @class BTCAddress;
@@ -93,6 +105,7 @@ typedef NS_ENUM(NSUInteger, BTCTransactionBuilderError) {
 - (BTCTransactionBuilderResult*) buildTransaction:(NSError**)errorOut;
 
 
+- (BTCTransactionBuilderResult*) buildTransaction:(NSError**)errorOut feeType:(BTCTransactionBuilderFeeType)feeType;
 
 // Optional configuration properties
 // ---------------------------------
