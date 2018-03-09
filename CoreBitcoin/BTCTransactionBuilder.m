@@ -17,19 +17,6 @@ NSString* const BTCTransactionBuilderErrorDomain = @"com.oleganza.CoreBitcoin.Tr
 @property(nonatomic, readwrite) BTCAmount outputsAmount;
 @end
 
-//        // inputs - sender ; outputs - receiver
-//        // sender
-//        BTCAmount change = result.inputsAmount - result.outputsAmount - fee;
-//
-//        // 50/50
-//        BTCAmount change = result.inputsAmount - fee / 2;
-//        result.outputsAmount -= fee / 2;
-//
-//        // receiver
-//        BTCAmount change = result.inputsAmount - result.outputsAmount;
-//        result.outputsAmount -= fee;
-
-
 @implementation BTCTransactionBuilder
 
 - (id) init {
@@ -137,27 +124,29 @@ NSString* const BTCTransactionBuilderErrorDomain = @"com.oleganza.CoreBitcoin.Tr
         }
         
         BTCAmount fee = [self computeFeeForTransaction:result.transaction];
-        
+
         BTCAmount change = 0;
-        
-        switch (feeType) {
-            case BTCTransactionBuilderFeeTypeSender :
-                change = result.inputsAmount - result.outputsAmount - fee;
-                break;
-                
-            case BTCTransactionBuilderFeeTypeHalf :
-                change = result.inputsAmount - result.outputsAmount;
-                result.outputsAmount -= fee / 2;
-                break;
-                
-            case BTCTransactionBuilderFeeTypeReceiver :
-                change = result.inputsAmount - result.outputsAmount;
-                result.outputsAmount -= fee;
-                break;
-                
-            default:
-                break;
-        }
+        change = result.inputsAmount - result.outputsAmount - fee;
+
+//
+//        switch (feeType) {
+//            case BTCTransactionBuilderFeeTypeSender :
+//                change = result.inputsAmount - result.outputsAmount - fee;
+//                break;
+//
+//            case BTCTransactionBuilderFeeTypeHalf :
+//                change = result.inputsAmount - result.outputsAmount;
+//                result.outputsAmount -= fee / 2;
+//                break;
+//
+//            case BTCTransactionBuilderFeeTypeReceiver :
+//                change = result.inputsAmount - result.outputsAmount;
+//                result.outputsAmount -= fee;
+//                break;
+//
+//            default:
+//                break;
+//        }
         
         if (change >= self.minimumChange) {
             // We have a big enough change, set missing values and return.
