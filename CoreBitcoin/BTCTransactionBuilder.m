@@ -126,27 +126,27 @@ NSString* const BTCTransactionBuilderErrorDomain = @"com.oleganza.CoreBitcoin.Tr
         BTCAmount fee = [self computeFeeForTransaction:result.transaction];
 
         BTCAmount change = 0;
-        change = result.inputsAmount - result.outputsAmount - fee;
+      //  change = result.inputsAmount - result.outputsAmount - fee;
 
-//
-//        switch (feeType) {
-//            case BTCTransactionBuilderFeeTypeSender :
-//                change = result.inputsAmount - result.outputsAmount - fee;
-//                break;
-//
-//            case BTCTransactionBuilderFeeTypeHalf :
-//                change = result.inputsAmount - result.outputsAmount;
-//                result.outputsAmount -= fee / 2;
-//                break;
-//
-//            case BTCTransactionBuilderFeeTypeReceiver :
-//                change = result.inputsAmount - result.outputsAmount;
-//                result.outputsAmount -= fee;
-//                break;
-//
-//            default:
-//                break;
-//        }
+
+        switch (feeType) {
+            case BTCTransactionBuilderFeeTypeSender :
+                change = result.inputsAmount - result.outputsAmount - fee;
+                break;
+
+            case BTCTransactionBuilderFeeTypeHalf :
+                change = result.inputsAmount - result.outputsAmount;
+                result.outputsAmount -= fee / 2;
+                break;
+
+            case BTCTransactionBuilderFeeTypeReceiver :
+                change = result.inputsAmount - result.outputsAmount;
+                result.outputsAmount -= fee;
+                break;
+
+            default:
+                break;
+        }
         
         if (change >= self.minimumChange) {
             // We have a big enough change, set missing values and return.
