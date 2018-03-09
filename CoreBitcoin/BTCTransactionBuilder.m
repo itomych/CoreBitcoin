@@ -146,7 +146,7 @@ NSString* const BTCTransactionBuilderErrorDomain = @"com.oleganza.CoreBitcoin.Tr
                 break;
                 
             case BTCTransactionBuilderFeeTypeHalf :
-                change = result.inputsAmount - fee / 2;
+                change = result.inputsAmount - result.outputsAmount;
                 result.outputsAmount -= fee / 2;
                 break;
                 
